@@ -1,7 +1,38 @@
 import os
+import sys
 import logging
 import asyncio
 import sqlite3
+import io
+
+# ==========================================
+# 🛡️ БЛОК ЗАЩИТЫ ОТ ОШИБОК КОДИРОВКИ WINDOWS
+# ==========================================
+# Жестко переключаем стандартный вывод на UTF-8
+if sys.platform.startswith('win'):
+    # Пытаемся перенастроить вывод консоли
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Для старых версий Python
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# Настраиваем логгер так, чтобы он писал в файл (безопасно) и в консоль
+# Если консоль не может отобразить эмодзи, она просто пропустит символ, а не упадет
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        # Пишем в файл (тут всегда UTF-8, ничего не сломается)
+        logging.FileHandler("bot.log", encoding='utf-8'),
+        # Пишем в консоль (с обработкой ошибок)
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+# ==========================================
+
 from google import genai
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -9,51 +40,31 @@ from dotenv import load_dotenv
 
 # --- ЗАГРУЗКА КОНФИГУРАЦИИ ---
 load_dotenv()
-logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Проверка ключей
 if not BOT_TOKEN or not GEMINI_API_KEY:
-    logging.error("❌ ОШИБКА: Ключи не найдены в .env! Проверь названия: BOT_TOKEN и GEMINI_API_KEY")
+    logging.error("CRITICAL: Ключи не найдены в .env! Проверьте файл.")
     exit()
 
-# Читаем системный промпт
+# Читаем системный промпт с защитой
 try:
     with open('system_prompt.txt', 'r', encoding='utf-8') as f:
         SYSTEM_PROMPT = f.read()
-    logging.info("✅ Системный промпт загружен.")
+    logging.info("System prompt loaded successfully (UTF-8).")
+except UnicodeDecodeError:
+    logging.error("ERROR: Файл system_prompt.txt сохранен не в UTF-8! Пожалуйста, пересохраните его в кодировке UTF-8.")
+    exit()
 except FileNotFoundError:
-    logging.error("❌ ОШИБКА: Файл system_prompt.txt не найден.")
+    logging.error("ERROR: Файл system_prompt.txt не найден.")
     exit()
 
-# Настройка клиента (новая библиотека)
+# Настройка клиента
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- ВЫБОР МОДЕЛИ ---
-# В 2025 году gemini-1.5-flash может быть устаревшей.
-# Используем актуальную версию 2.0.
+# Актуальная модель (из твоего списка)
 MODEL_NAME = "gemini-2.5-flash"
-
-# Функция для проверки доступных моделей (выводит в консоль при старте)
-def check_available_models():
-    try:
-        logging.info("🔍 Проверяю доступные модели...")
-        # Получаем список моделей
-        models = client.models.list()
-        # Ищем модели, содержащие 'gemini' и 'flash'
-        available = [m.name for m in models if "gemini" in m.name]
-        
-        logging.info(f"📋 Доступные модели для твоего ключа: {available}")
-        
-        # Если нашей модели нет в списке, предупреждаем
-        full_model_name = f"models/{MODEL_NAME}"
-        if not any(MODEL_NAME in m for m in available):
-            logging.warning(f"⚠️ ВНИМАНИЕ: Модель {MODEL_NAME} может не сработать. Попробуй одну из списка выше!")
-            
-    except Exception as e:
-        logging.error(f"⚠️ Не удалось получить список моделей (не критично): {e}")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -75,26 +86,28 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-    logging.info("✅ База данных подключена.")
+    logging.info("Database connected.")
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
         "👋 **Корневой Координатор ЕДИП на связи.**\n\n"
-        "Я готов к работе. Использую протокол: `Gemini 2.0`.\n"
-        "Введите вводные данные о бизнесе."
+        f"Ядро системы: `{MODEL_NAME}`\n"
+        "Жду вводные данные для начала работы."
     )
 
 @dp.message()
 async def process_message(message: types.Message):
     user_text = message.text
     
+    # Логгируем в файл, чтобы не засорять консоль эмодзи, которые могут крашить Windows
+    logging.info(f"New message from user {message.from_user.id}")
+    
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
     full_prompt = f"{SYSTEM_PROMPT}\n\n--- ВХОДНЫЕ ДАННЫЕ ОТ ПОЛЬЗОВАТЕЛЯ ---\n{user_text}"
     
     try:
-        # Запрос к Gemini
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=full_prompt
@@ -113,20 +126,21 @@ async def process_message(message: types.Message):
         conn.close()
         
         await message.answer(ai_answer, parse_mode="Markdown")
+        logging.info("Response sent successfully.")
         
     except Exception as e:
-        logging.error(f"❌ Ошибка генерации: {e}")
-        error_msg = str(e)
-        if "404" in error_msg:
-            await message.answer(f"⚠️ Ошибка модели: `{MODEL_NAME}` не найдена. Посмотрите в консоль сервера, там выведен список доступных моделей.")
-        else:
-            await message.answer("⚠️ Ошибка обработки. Попробуйте позже.")
+        # Ловим ошибку, но пишем её безопасно (ascii), чтобы консоль не умерла
+        error_msg = str(e).encode('ascii', 'replace').decode('ascii')
+        logging.error(f"API Error: {error_msg}")
+        await message.answer("⚠️ Произошла ошибка обработки. Попробуйте позже.")
 
 async def main():
     init_db()
-    # Проверяем модели перед запуском
-    check_available_models()
+    logging.info("Bot started via polling...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
+    # Исправление для Windows (SelectorEventLoop)
+    if sys.platform.startswith('win'):
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())
