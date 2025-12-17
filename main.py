@@ -19,9 +19,9 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN не найден в переменных окружения")
+    raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY не найден в переменных окружения")
+    raise ValueError("GEMINI_API_KEY not found in environment variables")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
@@ -34,9 +34,9 @@ try:
     with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
         SYSTEM_PROMPT = f.read().strip()
 except FileNotFoundError:
-    warning_msg = f"Файл {SYSTEM_PROMPT_FILE} не найден. Используется стандартный промпт."
+    warning_msg = "File " + str(SYSTEM_PROMPT_FILE) + " not found. Using default prompt."
     logger.warning(warning_msg)
-    SYSTEM_PROMPT = "Ты полезный помощник. Отвечай на русском языке."
+    SYSTEM_PROMPT = "You are a helpful assistant. Reply in Russian."
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -44,37 +44,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user_id not in user_conversations:
         user_conversations[user_id] = []
     await update.message.reply_text(
-        "👋 Привет! Я бот с интеграцией Google Gemini.\n"
-        "Напиши мне любое сообщение, и я помогу тебе! 🤖\n"
-        "Я буду запоминать контекст нашего диалога."
+        "Hello! I'm a bot with Google Gemini integration.\n"
+        "Write me any message, and I'll help you!\n"
+        "I will remember the context of our conversation."
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = """
-📖 Доступные команды:
-/start - Запустить бота
-/help - Показать эту справку
-/prompt - Показать текущий системный промпт
-/clear - Очистить историю диалога
+Available commands:
+/start - Start the bot
+/help - Show this help
+/prompt - Show current system prompt
+/clear - Clear chat history
 
-Я запоминаю контекст нашего диалога и использую его для ответов!
+I remember the context of our conversation and use it for answers!
     """
     await update.message.reply_text(help_text)
 
 
 async def show_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    prompt_msg = f"Текущий системный промпт:\n\n{SYSTEM_PROMPT}"
-    await update.message.reply_text("Текущий системный промпт:\n\n" + SYSTEM_PROMPT)
+    await update.message.reply_text("Current system prompt:\n\n" + SYSTEM_PROMPT)
 
 
 async def clear_context(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if user_id in user_conversations:
         user_conversations[user_id] = []
-        await update.message.reply_text("🗑️ История диалога очищена!")
+        await update.message.reply_text("Chat history cleared!")
     else:
-        await update.message.reply_text("История была уже пуста.")
+        await update.message.reply_text("History was already empty.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
