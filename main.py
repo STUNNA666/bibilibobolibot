@@ -34,7 +34,8 @@ try:
     with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
         SYSTEM_PROMPT = f.read().strip()
 except FileNotFoundError:
-    logger.warning(f"Файл {SYSTEM_PROMPT_FILE} не найден. Используется стандартный промпт.")
+    warning_msg = f"Файл {SYSTEM_PROMPT_FILE} не найден. Используется стандартный промпт."
+    logger.warning(warning_msg)
     SYSTEM_PROMPT = "Ты полезный помощник. Отвечай на русском языке."
 
 
@@ -63,7 +64,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def show_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(f"📝 Текущий системный промпт:\n\n{SYSTEM_PROMPT}")
+    prompt_msg = f"Текущий системный промпт:\n\n{SYSTEM_PROMPT}"
+    await update.message.reply_text("Текущий системный промпт:\n\n" + SYSTEM_PROMPT)
 
 
 async def clear_context(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -82,43 +84,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if user_id not in user_conversations:
         user_conversations[user_id] = []
     
-    logger.info(f"Сообщение от пользователя {user_id}: {user_message}")
+    logger.info("Message from user " + str(user_id) + ": " + user_message)
     
     try:
         await update.message.chat.send_action("typing")
         
-        user_conversations[user_id].append(f"Пользователь: {user_message}")
+        user_conversations[user_id].append("User: " + user_message)
         
         history = "\n".join(user_conversations[user_id][-MAX_HISTORY:])
         
-        prompt = f"{SYSTEM_PROMPT}\n\nИстория диалога:\n{history}"
+        prompt = SYSTEM_PROMPT + "\n\nHistory:\n" + history
         
         response = model.generate_content(prompt)
         ai_response = response.text
         
-        user_conversations[user_id].append(f"Ассистент: {ai_response}")
+        user_conversations[user_id].append("Assistant: " + ai_response)
         
         if len(user_conversations[user_id]) > MAX_HISTORY * 2:
             user_conversations[user_id] = user_conversations[user_id][-MAX_HISTORY * 2:]
         
-        logger.info(f"Ответ для пользователя {user_id}: {ai_response[:100]}...")
+        logger.info("Response to user " + str(user_id) + ": " + ai_response[:100] + "...")
         
         await update.message.reply_text(ai_response)
         
     except Exception as e:
-        logger.error(f"Ошибка при обработке сообщения: {e}")
+        logger.error("Error processing message: " + str(e))
         await update.message.reply_text(
-            f"❌ Произошла ошибка: {str(e)}\n"
-            "Пожалуйста, попробуйте снова."
+            "Error: " + str(e) + "\n"
+            "Please try again."
         )
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(f"Ошибка: {context.error}")
+    logger.error("Error: " + str(context.error))
 
 
 def main() -> None:
-    logger.info("Запуск Telegram бота...")
+    logger.info("Starting Telegram bot...")
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
@@ -131,7 +133,7 @@ def main() -> None:
     
     application.add_error_handler(error_handler)
     
-    logger.info("Бот запущен и готов к работе!")
+    logger.info("Bot is running and ready to work!")
     application.run_polling()
 
 
