@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import logging
 import os
 from pathlib import Path
@@ -26,7 +25,7 @@ SYSTEM_PROMPT_FILE = Path(__file__).parent / 'system_prompt.txt'
 try:
     with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
         SYSTEM_PROMPT = f.read().strip()
-except FileNotFoundError:
+except Exception:
     SYSTEM_PROMPT = 'You are helpful assistant.'
 
 async def start(update, context):
