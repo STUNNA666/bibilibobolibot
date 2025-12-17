@@ -4,8 +4,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import google.generativeai as genai
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 load_dotenv()
 
