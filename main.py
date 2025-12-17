@@ -19,9 +19,9 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
+    raise ValueError("TELEGRAM_BOT_TOKEN not found")
 if not GEMINI_API_KEY:
-    raise ValueError("GEMINI_API_KEY not found in environment variables")
+    raise ValueError("GEMINI_API_KEY not found")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
@@ -34,56 +34,44 @@ try:
     with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
         SYSTEM_PROMPT = f.read().strip()
 except FileNotFoundError:
-    warning_msg = "File " + str(SYSTEM_PROMPT_FILE) + " not found. Using default prompt."
-    logger.warning(warning_msg)
-    SYSTEM_PROMPT = "You are a helpful assistant. Reply in Russian."
+    SYSTEM_PROMPT = "You are a helpful assistant."
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def start(update, context):
     user_id = update.effective_user.id
     if user_id not in user_conversations:
         user_conversations[user_id] = []
-    await update.message.reply_text(
-        "Hello! I'm a bot with Google Gemini integration.\n"
-        "Write me any message, and I'll help you!\n"
-        "I will remember the context of our conversation."
-    )
+    msg = "Hello! I am a bot with Google Gemini. Write me and I will help!"
+    await update.message.reply_text(msg)
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = """
-Available commands:
-/start - Start the bot
-/help - Show this help
-/prompt - Show current system prompt
-/clear - Clear chat history
-
-I remember the context of our conversation and use it for answers!
-    """
-    await update.message.reply_text(help_text)
+async def help_command(update, context):
+    msg = "Commands: /start /help /prompt /clear"
+    await update.message.reply_text(msg)
 
 
-async def show_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Current system prompt:\n\n" + SYSTEM_PROMPT)
+async def show_prompt(update, context):
+    msg = "System prompt:\n\n" + SYSTEM_PROMPT
+    await update.message.reply_text(msg)
 
 
-async def clear_context(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def clear_context(update, context):
     user_id = update.effective_user.id
     if user_id in user_conversations:
         user_conversations[user_id] = []
-        await update.message.reply_text("Chat history cleared!")
+        await update.message.reply_text("Chat cleared!")
     else:
-        await update.message.reply_text("History was already empty.")
+        await update.message.reply_text("Already empty.")
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_message(update, context):
     user_message = update.message.text
     user_id = update.effective_user.id
     
     if user_id not in user_conversations:
         user_conversations[user_id] = []
     
-    logger.info("Message from user " + str(user_id) + ": " + user_message)
+    logger.info("Message from user: " + str(user_id))
     
     try:
         await update.message.chat.send_action("typing")
@@ -102,24 +90,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if len(user_conversations[user_id]) > MAX_HISTORY * 2:
             user_conversations[user_id] = user_conversations[user_id][-MAX_HISTORY * 2:]
         
-        logger.info("Response to user " + str(user_id) + ": " + ai_response[:100] + "...")
+        logger.info("Sent response")
         
         await update.message.reply_text(ai_response)
         
     except Exception as e:
-        logger.error("Error processing message: " + str(e))
-        await update.message.reply_text(
-            "Error: " + str(e) + "\n"
-            "Please try again."
-        )
+        logger.error("Error: " + str(e))
+        msg = "Error. Try again."
+        await update.message.reply_text(msg)
 
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def error_handler(update, context):
     logger.error("Error: " + str(context.error))
 
 
-def main() -> None:
-    logger.info("Starting Telegram bot...")
+def main():
+    logger.info("Starting bot...")
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
@@ -132,7 +118,7 @@ def main() -> None:
     
     application.add_error_handler(error_handler)
     
-    logger.info("Bot is running and ready to work!")
+    logger.info("Bot running!")
     application.run_polling()
 
 
